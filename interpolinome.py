@@ -83,33 +83,34 @@ def computeInterpolation(xdata, ydata, degree, weight):
     for column in range(degree):
         X =  np.column_stack((X[:,0]*xdata, X))
 
+    # normalize weight
+    weight /= np.sum(weight)
     P = np.diag(weight)
 
     beta = np.linalg.inv(X.transpose() @ P @ X) @ X.transpose() @ P @ ydata
 
+    # we want to know how well fit the curve
+    # For this reason the theory tells us to calculate the correct R^2 parameter: the closer it is to 1 the better the
+    # curve fits.
     N = len(ydata)
-
     ymean = sum(np.sqrt(P) @ ydata)/N
-
     errorV = ydata - X @ beta
-
     SQR = errorV.transpose() @ P @ errorV
-
-    bluttro = np.sqrt(P) @ ydata - np.ones(len(xdata)) * ymean
-
-    SQT = bluttro.transpose() @ bluttro
-
-    R_2 = 1 - SQR/SQT
-
-    R_2_C = 1 - (SQR / (N - (degree+1)))/ ( SQT / (N-1) )
-
+    h = np.sqrt(P) @ ydata - np.ones(len(xdata)) * ymean
+    SQT = h.transpose() @ h
+    R_2 = 1 - (SQR / (N - (degree+1)))/ ( SQT / (N-1) )
     print("R^2 ", R_2)
-    print("R^2 corrected ", R_2_C)
+
+    # we also want to have the magnitude of the error. For this we can calculate the standard deviation of the error
+    sigma = np.sqrt(SQR / (len(xdata) - (degree+1)))
+    print("error standar deviation sigma ", sigma)
+
     return beta
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--plot", help="plot curve", action='store_true', default=False)
+    parser.add_argument("-a", "--alt", help="alternative coefficient print", action='store_true', default=False)
     parser.add_argument("jsonin", help="input json file")
 
     args = parser.parse_args()
@@ -117,6 +118,7 @@ def main():
         sys.exit(1)
 
     plot = args.plot
+    alternativePrints = args.alt
     with open(args.jsonin, 'r') as f:
         data = json.load(f)
 
@@ -124,14 +126,21 @@ def main():
 
     beta = computeInterpolation(xdata, ydata, degree, weight)
 
-    p = np.poly1d(beta)
-    print(p)
+    p = np.polynomial.Polynomial(np.flip(beta))
+    if alternativePrints:
+        deg = p.degree()
+        for c in beta[:-1]:
+            print("%.15g x**%d" % (c, deg))
+            deg -=1
+        print("%.15g" % beta[-1])
+    else:
+        print(p)
 
     if plot:
         newx = np.linspace(0, (1<<bit) - 1)
 
         newy = p(newx)
-        error = ydata - p(xdata)
+        error = ydata - p(np.array(xdata))
 
         # plot figures
         dpi = 96

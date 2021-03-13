@@ -9,7 +9,7 @@
             "type": "python",
             "request": "launch",
             "program": "interpolinome.py",
-            "args": ["data1.json"],
+            "args": ["-p", "data1.json"],
             "console": "integratedTerminal"
         }
     ]
