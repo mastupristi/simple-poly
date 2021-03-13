@@ -8,73 +8,143 @@ import sys
 import argparse
 import json
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
+import jsonschema
+from jsonschema import validate
 
+# Describe what kind of json you expect.
+versionSchema = {
+    "type": "object",
+    "properties": {
+        "data": {
+            "type": "object",
+            "properties": {
+                "x": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    },
+                    "minItems": 1,
+                    "uniqueItems": True
+                },
+                "y": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    },
+                    "minItems": 1,
+                },
+                "w": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    },
+                    "minItems": 1,
+                }
+            },
+            "required": ["x", "y"],
+            "additionalProperties": False
+        },
+        "degree": {"type": "integer"},
+        "bit": {"type": "integer"},
+    },
+    "required": ["degree", "bit"],
+    "additionalProperties": False
+}
 
-parser = argparse.ArgumentParser()
-parser.add_argument("jsonin", help="input json file")
+def checkData(data):
+    try:
+        validate(instance=data, schema=versionSchema)
+    except jsonschema.exceptions.ValidationError as err:
+        print("Invalid data file. Nothing Done", file=sys.stderr)
+        sys.exit(1)
 
-args = parser.parse_args()
-if not args.jsonin:
-    sys.exit(1)
-    
-fin = open(args.jsonin, 'r')
-fin_data = fin.read()
-fin.close()
+    degree = data['degree']
+    bit = data['bit']
+    xdata = data['data']['x']
+    ydata = data['data']['y']
+    if len(xdata) != len(ydata):
+        print("x and y must have the same length", file=sys.stderr)
+        sys.exit(1)
 
+    if 'w' in data['data']:
+        weight = data['data']['w']
+        if len(xdata) != len(weight):
+            print("w must have the same length of x and y", file=sys.stderr)
+            sys.exit(1)
+    else:
+        weight = [1] * len(xdata)
 
-data = json.loads(fin_data)
+    return xdata, ydata, degree, bit, weight
 
-degree = data['degree']
-xdata = data['data']['x']
-ydata = data['data']['y']
-weight = data['data']['w']
+def computeInterpolation(xdata, ydata, degree, weight):
+    X = np.ones((len(xdata),1))
+    for column in range(degree):
+        X =  np.column_stack((X[:,0]*xdata, X))
 
-X = np.ones((len(xdata),1))
-for column in range(degree):
-    X =  np.column_stack((X[:,0]*xdata, X))
+    P = np.diag(weight)
 
-#print(X)
+    beta = np.linalg.inv(X.transpose() @ P @ X) @ X.transpose() @ P @ ydata
 
-P = np.diag(weight)
+    N = len(ydata)
 
-beta = np.linalg.inv(X.transpose() @ P @ X) @ X.transpose() @ P @ ydata
+    ymean = sum(np.sqrt(P) @ ydata)/N
 
-print(beta)
+    errorV = ydata - X @ beta
 
-N = len(ydata)
+    SQR = errorV.transpose() @ P @ errorV
 
-ymean = sum(np.sqrt(P) @ ydata)/N
+    bluttro = np.sqrt(P) @ ydata - np.ones(len(xdata)) * ymean
 
-errorV = ydata - X @ beta
+    SQT = bluttro.transpose() @ bluttro
 
-SQR = errorV.transpose() @ P @ errorV
+    R_2 = 1 - SQR/SQT
 
-bluttro = np.sqrt(P) @ ydata - np.ones(len(xdata)) * ymean
+    R_2_C = 1 - (SQR / (N - (degree+1)))/ ( SQT / (N-1) )
 
-SQT = bluttro.transpose() @ bluttro
+    print("R^2 ", R_2)
+    print("R^2 corrected ", R_2_C)
+    return beta
 
-R_2 = 1 - SQR/SQT
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("jsonin", help="input json file")
 
-R_2_C = 1 - (SQR / (N - (degree+1)))/ ( SQT / (N-1) )
+    args = parser.parse_args()
+    if not args.jsonin:
+        sys.exit(1)
 
-print("R^2 ", R_2)
-print("R^2 corrected ", R_2_C)
+    with open(args.jsonin, 'r') as f:
+        data = json.load(f)
 
-RangeX = max(xdata) - min(xdata)
-meanX = (min(xdata) + max(xdata))/2
-ExtRange = RangeX*1.2
-NewMin = meanX - ExtRange/2
-NewMaX = meanX + ExtRange/2
+    xdata, ydata, degree, bit, weight = checkData(data)
 
-newx = np.linspace(NewMin, NewMaX, 100)
+    beta = computeInterpolation(xdata, ydata, degree, weight)
 
-X1 = np.ones((len(newx),1))
-for column in range(degree):
-    X1 =  np.column_stack((X1[:,0]*newx, X1))
-    
-newy = X1 @ beta
+    p = np.poly1d(beta)
+    print(p)
 
-plt.plot(xdata, ydata, label='data', marker='o')
-plt.plot(newx, newy, label='poli')
-plt.show()
+    newx = np.linspace(0, (1<<bit) - 1)
+
+    newy = p(newx)
+
+    error = ydata - p(xdata)
+
+    dpi = 96
+
+    fig1, ax1 = plt.subplots(1, 1, figsize=(1440/dpi, 900/dpi), dpi=dpi)
+    ax1.grid()
+
+    plt.plot(xdata, ydata, label='data', marker='o', figure=fig1)
+    plt.plot(newx, newy, label='poli', figure=fig1)
+
+    fig2, ax2 = plt.subplots(1, 1, figsize=(1440/dpi, 900/dpi), dpi=dpi)
+
+    ax2.grid()
+    plt.plot(xdata, error, label='error', marker='o', figure=fig2)
+    plt.show()
+
+if __name__ == '__main__':
+    main()
+    sys.exit(0)
