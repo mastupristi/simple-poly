@@ -1,4 +1,4 @@
-# polinoimial interpolator
+# polynoimial interpolator
 
 this simple project aims to give a polynomial interpolation of a given dataset.
 
