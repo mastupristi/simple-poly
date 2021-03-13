@@ -109,12 +109,14 @@ def computeInterpolation(xdata, ydata, degree, weight):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("-p", "--plot", help="plot curve", action='store_true', default=False)
     parser.add_argument("jsonin", help="input json file")
 
     args = parser.parse_args()
     if not args.jsonin:
         sys.exit(1)
 
+    plot = args.plot
     with open(args.jsonin, 'r') as f:
         data = json.load(f)
 
@@ -125,25 +127,26 @@ def main():
     p = np.poly1d(beta)
     print(p)
 
-    newx = np.linspace(0, (1<<bit) - 1)
+    if plot:
+        newx = np.linspace(0, (1<<bit) - 1)
 
-    newy = p(newx)
+        newy = p(newx)
+        error = ydata - p(xdata)
 
-    error = ydata - p(xdata)
+        # plot figures
+        dpi = 96
 
-    dpi = 96
+        fig1, ax1 = plt.subplots(1, 1, figsize=(1440/dpi, 900/dpi), dpi=dpi)
+        ax1.grid()
 
-    fig1, ax1 = plt.subplots(1, 1, figsize=(1440/dpi, 900/dpi), dpi=dpi)
-    ax1.grid()
+        plt.plot(xdata, ydata, label='data', marker='o', figure=fig1)
+        plt.plot(newx, newy, label='poli', figure=fig1)
 
-    plt.plot(xdata, ydata, label='data', marker='o', figure=fig1)
-    plt.plot(newx, newy, label='poli', figure=fig1)
+        fig2, ax2 = plt.subplots(1, 1, figsize=(1440/dpi, 900/dpi), dpi=dpi)
 
-    fig2, ax2 = plt.subplots(1, 1, figsize=(1440/dpi, 900/dpi), dpi=dpi)
-
-    ax2.grid()
-    plt.plot(xdata, error, label='error', marker='o', figure=fig2)
-    plt.show()
+        ax2.grid()
+        plt.plot(xdata, error, label='error', marker='o', figure=fig2)
+        plt.show()
 
 if __name__ == '__main__':
     main()
