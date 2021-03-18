@@ -103,7 +103,7 @@ def computeInterpolation(xdata, ydata, degree, weight):
 
     # we also want to have the magnitude of the error. For this we can calculate the standard deviation of the error
     sigma = np.sqrt(SQR / (len(xdata) - (degree+1)))
-    print("error standar deviation sigma ", sigma)
+    print("error standard deviation sigma ", sigma)
 
     return beta
 
